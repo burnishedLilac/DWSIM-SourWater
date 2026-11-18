@@ -9,6 +9,7 @@ Stability: Successive Substitution Damping for Non-Linear Convergence
 Integration: Optimized for DWSIM Python Script Unit Operation
 
 Changelog v8.3.1:
+- FIX: Outlet 2 (vapor) is optional when nothing vaporizes; clear message when it is needed.
 - FIX: Feed above its dew point no longer raises an error; all flow goes to the vapor outlet (oms2).
 
 Changelog v8.3.0:
@@ -455,15 +456,24 @@ def Main():
         x_full[i] = L[k] / Lt if Lt > 0 else n[k] / F_mol
         if y: y_full[i] = y[k]
 
-    oms1.SetTemperature(T); oms1.SetPressure(P_op)
-    oms1.SetOverallComposition(Array[Double](x_full))
-    oms1.SetMolarFlow(Lt)
+    liq = globals().get('oms1')
+    vap = globals().get('oms2')
+    if liq is None:
+        raise ValueError("SWEQ: connect a material stream to OUTLET 1 (liquid) of the Python Script")
+    if vap is None and V > 0:
+        raise ValueError("SWEQ: %.1f %% of the feed vaporizes at these conditions; connect a material "
+                         "stream to OUTLET 2 (vapor) of the Python Script" % (100.0 * V / F_mol))
 
-    oms2.SetTemperature(T); oms2.SetPressure(P_op)
-    oms2.SetOverallComposition(Array[Double](y_full if y else x_full))
-    oms2.SetMolarFlow(V if V > 0 else 0.0)
+    liq.SetTemperature(T); liq.SetPressure(P_op)
+    liq.SetOverallComposition(Array[Double](x_full))
+    liq.SetMolarFlow(Lt)
+    liq.Calculate()
 
-    oms1.Calculate(); oms2.Calculate()
+    if vap is not None:
+        vap.SetTemperature(T); vap.SetPressure(P_op)
+        vap.SetOverallComposition(Array[Double](y_full if y else x_full))
+        vap.SetMolarFlow(V if V > 0 else 0.0)
+        vap.Calculate()
 
     if res is None:  # all vapor: no liquid datasheet to report
         return

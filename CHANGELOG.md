@@ -2,8 +2,12 @@
 
 ## [8.3.1] — 2026-11-18
 
+### Added
+- First run inside DWSIM confirmed. Bubble-point comparison with DWSIM's built-in Sour Water package (`validation/compare_dwsim_native.py`, `validation/data/dwsim_native_sourwater.csv`).
+
 ### Fixed
 - A feed above its dew point raised "feed fully vaporizes" and stopped the flowsheet; it now goes entirely to the vapor outlet (`oms2`).
+- Outlet 2 (vapor) is optional when nothing vaporizes; a clear message asks for it when it is needed (was `NameError: oms2`).
 
 ## [8.3.0] — 2026-11-18
 

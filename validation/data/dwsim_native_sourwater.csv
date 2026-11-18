@@ -1,0 +1,10 @@
+# DWSIM built-in "Sour Water" property package (Edwards activity coefficient + Henry's law), bubble points
+# computed by the repository owner on 2026-11-17 with a material stream spec "Temperature and Vapor Fraction" (VF = 0).
+# DWSIM version not recorded. Values transcribed from screenshots. Pressures in bar; y = vapor mole fractions.
+# rumpf_ref = matching Rumpf et al. (1999) point (blank = no measured data at this condition)
+T_C,x_H2O,x_NH3,x_H2S,P_bubble_bar,y_H2O,y_NH3,y_H2S,rumpf_ref
+29.37,0.9826767,0.014437496,0.0028858091,0.056712,0.71064913,0.23950676,0.049844113,
+80,0.9826767,0.014437496,0.0028858091,0.602396,0.77383317,0.15769396,0.068472873,
+120,0.9826767,0.014437496,0.0028858091,2.4667,0.790712,0.1260073,0.083280705,
+80,0.866543,0.093821,0.039636,1.58843,0.2587863,0.20816108,0.53305262,353.14K m_NH3=6.010 m_H2S=2.539
+120,0.928633,0.053701,0.017666,4.60035,0.40066198,0.19275946,0.40657856,393.14K m_NH3=3.210 m_H2S=1.056
