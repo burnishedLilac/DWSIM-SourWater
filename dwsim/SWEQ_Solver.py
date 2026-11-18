@@ -1,5 +1,5 @@
 """
-SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.3.0
+SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.3.1
 --------------------------------------------------------------------------------
 Thermodynamics: Edwards (1978) + PITZER MODEL (Rumpf et al., 1999)
 Activity: Pitzer specific interactions for NH3/H2S + Davies fallback for CO2
@@ -7,6 +7,9 @@ Henry's Law: Continuous Physical Scaling + Pitzer Activity Coupling
 Water Activity: Osmotic Mole Fraction Correction
 Stability: Successive Substitution Damping for Non-Linear Convergence
 Integration: Optimized for DWSIM Python Script Unit Operation
+
+Changelog v8.3.1:
+- FIX: Feed above its dew point no longer raises an error; all flow goes to the vapor outlet (oms2).
 
 Changelog v8.3.0:
 - FIX: H2S Henry constant temperature dependence from IUPAC SDS-32 correlation (was ~1.7x too
@@ -39,7 +42,7 @@ Release: Enterprise Extreme Concentration Edition (GPLv3 Only).
 
 import math
 
-__version__ = "8.3.0"
+__version__ = "8.3.1"
 import sys
 import os
 
@@ -316,7 +319,7 @@ def generate_report(res, T, P_op, flows_h, total_h, rho):
     h2s_mgL = (l['H2S'] + l['HS'] + l['S']) * CONST['MW']['H2S'] * rho_kg_L * 1000.0
     nh3_mgL = (l['NH3'] + l['NH4']) * CONST['MW']['NH3'] * rho_kg_L * 1000.0
 
-    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.3.0 ".center(W), " Edwards / Pitzer (NH4HS) + Davies (carbonate) ".center(W), HR]
+    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.3.1 ".center(W), " Edwards / Pitzer (NH4HS) + Davies (carbonate) ".center(W), HR]
     try: lines.append(" Date: %s " % DateTime.Now.ToString("yyyy-MM-dd HH:mm").center(W))
     except: pass
     lines.append("\n 1. EXECUTIVE SUMMARY & SAFETY CHECK ".ljust(W))
@@ -401,9 +404,7 @@ def pt_flash(T_K, P_Pa, n_feed):
     K = k_values(res, z)
     beta = 0.0
     for _ in range(SOLVER['MAX_ITER_FLASH']):
-        beta = _rachford_rice(z, K)
-        if beta >= 1.0:
-            raise ValueError("SWEQ: feed fully vaporizes at this T/P (outside model range)")
+        beta = min(_rachford_rice(z, K), 1.0 - 1e-9)  # keep a trace of liquid while iterating
         x = {k: z[k]/(1.0+beta*(K[k]-1.0)) for k in KEYS}
         sx = sum(x.values()); x = {k: v/sx for k, v in x.items()}
         L = {k: F*(1.0-beta)*x[k] for k in KEYS}
@@ -412,6 +413,9 @@ def pt_flash(T_K, P_Pa, n_feed):
         d = max(abs(math.log(K_new[k]/K[k])) for k in KEYS)
         K = {k: math.exp(0.5*math.log(K[k]) + 0.5*math.log(K_new[k])) for k in KEYS}
         if d < 1e-8: break
+    if beta > 1.0 - 1e-6:
+        # Above the dew point: single vapor phase with the feed composition
+        return F, dict(z), {k: 0.0 for k in KEYS}, None
     V = F*beta
     y = {k: K[k]*x[k] for k in KEYS}
     sy = sum(y.values()); y = {k: v/sy for k, v in y.items()}
@@ -448,7 +452,7 @@ def Main():
 
     x_full = [0.0] * len(ids); y_full = [0.0] * len(ids)
     for k, i in idx.items():
-        x_full[i] = L[k] / Lt
+        x_full[i] = L[k] / Lt if Lt > 0 else n[k] / F_mol
         if y: y_full[i] = y[k]
 
     oms1.SetTemperature(T); oms1.SetPressure(P_op)
@@ -461,6 +465,8 @@ def Main():
 
     oms1.Calculate(); oms2.Calculate()
 
+    if res is None:  # all vapor: no liquid datasheet to report
+        return
     res['V_frac'] = V / F_mol
     m_kg_s = {k: v * CONST['MW'][k] / 1000.0 for k, v in L.items()}
     kg_w = m_kg_s['H2O']

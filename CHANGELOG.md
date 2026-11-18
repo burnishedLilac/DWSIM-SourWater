@@ -1,5 +1,10 @@
 # Changelog
 
+## [8.3.1] — 2026-11-18
+
+### Fixed
+- A feed above its dew point raised "feed fully vaporizes" and stopped the flowsheet; it now goes entirely to the vapor outlet (`oms2`).
+
 ## [8.3.0] — 2026-11-18
 
 ### Fixed

@@ -38,6 +38,11 @@ check("Flash 80C/0.7atm: component balance error (mol)", bal, 0.0, 1e-6)
 check("Flash 80C/0.7atm: P_bubble of liquid = P_op (atm)", res['P_bubble']/101325.0, 0.7, 1e-4)
 print("V/F = %.5f  y = %s" % (V/sum(n.values()), {k: round(v, 4) for k, v in (y or {}).items()}))
 
+# Above the dew point (96.8 % water at 1 atm, 100 C): all vapor, exact balance
+n2 = {'NH3': 0.02, 'H2S': 0.01, 'CO2': 0.002, 'H2O': 0.968}
+V2, y2, L2, _ = S.pt_flash(373.15, 101325.0, n2)
+check("Flash 100C/1atm dilute sour water: V/F (all vapor)", V2 / sum(n2.values()), 1.0, 1e-9)
+
 def test_all_limits():
     assert all(checks), "some limiting-case checks failed (see output)"
 
