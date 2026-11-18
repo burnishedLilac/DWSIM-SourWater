@@ -15,6 +15,7 @@ tests/test_limits.py        limiting-case checks (Henry constants, dilute pH, wa
 validation/validate.py      comparison against published experimental VLE data
 validation/data/*.csv       experimental data with full source citation in each header
 validation/RESULTS.md       latest validation report (generated)
+validation/compare_dwsim_native.py   SWEQ vs DWSIM built-in Sour Water package
 CHANGELOG.md · ROADMAP.md
 ```
 
@@ -55,6 +56,16 @@ Current results (v8.3.0, NH3–H2S–H2O, 293–393 K), average absolute deviati
 | Leyko 1959 | 14 | 10.9 % | 12.7 % | independent |
 | Oratovskii et al. 1964 | 28 | 27.7 % | 35.6 % | independent (compiler-estimated pressures) |
 | *v8.2.0 on Rumpf 1999, for reference* | 64 | 81.6 % | 15.1 % | |
+
+**Comparison with DWSIM's built-in Sour Water package** (bubble points, `validation/compare_dwsim_native.py`),
+deviation from Rumpf 1999 measurements, p_total / p(NH3) / p(H2S):
+
+| Condition | DWSIM built-in | SWEQ |
+|---|---|---|
+| 80 °C, 6.0 m NH3, 2.5 m H2S (SWEQ hold-out) | +1 % / −38 % / +39 % | −5 % / −16 % / +3 % |
+| 120 °C, 3.2 m NH3, 1.1 m H2S (in SWEQ fit) | +12 % / −10 % / +58 % | −2 % / +1 % / +1 % |
+
+Only two measured points so far; the built-in package over-predicts p(H2S) systematically in all five conditions tested.
 
 The data sets disagree with each other at high concentration (see `validation/REGRESSION.md`).
 Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point is listed in `validation/RESULTS.md`.
