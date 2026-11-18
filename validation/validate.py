@@ -38,6 +38,18 @@ def dev(calc, exp):
 
 datasets = []
 
+# Rumpf et al. 1999 (molality, bar) - points with p <= 0.01 bar skipped for that species
+pts = []
+for r in read('rumpf_1999.csv'):
+    T = float(r['T_K']); mN = float(r['m_NH3']); mS = float(r['m_H2S'])
+    if mS == 0: continue
+    pp, res = predict(T, mN, mS)
+    pts.append(dict(T=T, mN=mN, mS=mS, ph=res['ph'],
+                    eS=float(r['p_H2S_bar']), cS=pp['H2S'], eN=float(r['p_NH3_bar']), cN=pp['NH3']))
+datasets.append(("Rumpf, Perez-Salado Kamps, Sing & Maurer (1999)",
+                 "molality as published; 313 and 393 K used in the parameter fit, 353 K is hold-out; "
+                 "points with p <= 0.01 bar excluded from the statistics", pts))
+
 # Oratovskii et al. 1964 (wt%, bar)
 pts = []
 for r in read('oratovskii_1964.csv'):
@@ -68,7 +80,7 @@ out = ["# SWEQ validation against experimental data", "",
        "https://srdata.nist.gov/solubility/IUPAC/SDS-32/SDS-32-pages_54.pdf", ""]
 summary = []
 for name, note, pts in datasets:
-    dS = [dev(p['cS'], p['eS']) for p in pts]; dN = [dev(p['cN'], p['eN']) for p in pts]
+    dS = [dev(p['cS'], p['eS']) for p in pts if p['eS'] > 0.01]; dN = [dev(p['cN'], p['eN']) for p in pts if p['eN'] > 0.01]
     lo = [p for p in pts if p['mN'] <= 3.0]
     line = "%-42s n=%2d | p(H2S) AAD %5.1f%% bias %+6.1f%% | p(NH3) AAD %5.1f%% bias %+6.1f%%" % (
         name, len(pts), aad(dS), bias(dS), aad(dN), bias(dN))
@@ -79,21 +91,21 @@ for name, note, pts in datasets:
             "| Bias, all points | %+.1f%% | %+.1f%% |" % (bias(dS), bias(dN))]
     if lo:
         out.append("| AAD, m(NH3) ≤ 3 mol/kg (n=%d) | %.1f%% | %.1f%% |" % (
-            len(lo), aad([dev(p['cS'], p['eS']) for p in lo]), aad([dev(p['cN'], p['eN']) for p in lo])))
+            len(lo), aad([dev(p['cS'], p['eS']) for p in lo if p['eS'] > 0.01]), aad([dev(p['cN'], p['eN']) for p in lo if p['eN'] > 0.01])))
     out += ["", "| T (K) | m NH3 | m H2S | pH calc | p(H2S) exp | p(H2S) calc | dev | p(NH3) exp | p(NH3) calc | dev |",
             "|---|---|---|---|---|---|---|---|---|---|"]
     for p in pts:
-        out.append("| %.1f | %.2f | %.2f | %.2f | %.4f | %.4f | %+.0f%% | %.4f | %.4f | %+.0f%% |" % (
-            p['T'], p['mN'], p['mS'], p['ph'], p['eS'], p['cS'], dev(p['cS'], p['eS']),
-            p['eN'], p['cN'], dev(p['cN'], p['eN'])))
+        fmt = lambda c, e: ("%+.0f%%" % dev(c, e)) if e > 0.01 else "n/a"
+        out.append("| %.1f | %.2f | %.2f | %.2f | %.4f | %.4f | %s | %.4f | %.4f | %s |" % (
+            p['T'], p['mN'], p['mS'], p['ph'], p['eS'], p['cS'], fmt(p['cS'], p['eS']),
+            p['eN'], p['cN'], fmt(p['cN'], p['eN'])))
     out += ["", "Pressures in bar.", ""]
 
-out += ["## Interpretation", "",
-        "* At moderate concentration (NH3 ≲ 3 mol/kg) p(H2S) is reproduced reasonably; deviations grow "
-        "with concentration: H2S is over-predicted and NH3 under-predicted.",
-        "* This is the expected signature of the missing ion–molecule Pitzer parameters "
-        "(NH3–NH4HS, H2S–NH4HS) and of the constant, uncited β0/β1 for NH4+/HS−.",
-        "* Next step: regress those parameters (with temperature dependence) against these and other "
-        "published data sets (e.g. Rumpf et al. 1999, Kurz et al. 1995), keeping a hold-out set.", ""]
+out += ["## Interpretation (v8.3.0)", "",
+        "* See `validation/REGRESSION.md` for how the parameters were obtained and the fit/hold-out split.", "",
+        "* Rumpf 1999 is the reference data set (measured, molality-based, same group as the model).",
+        "* Oratovskii 1964 pressures are IUPAC-compiler estimates; v8.3 under-predicts them by ~25-35 %,",
+        "  i.e. this set disagrees with Rumpf under the current model. Leyko 1959 needs a density assumption.",
+        "* Remaining gaps: no Pitzer CO2/carbonate network, ideal vapor, constant beta0/Cphi.", ""]
 open(os.path.join(HERE, 'RESULTS.md'), 'w').write("\n".join(out))
 print("\n".join(summary)); print("\nWrote validation/RESULTS.md")

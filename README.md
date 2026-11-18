@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/burnishedLilac/DWSIM-SourWater/actions/workflows/tests.yml/badge.svg)](https://github.com/burnishedLilac/DWSIM-SourWater/actions/workflows/tests.yml)
 
-**Version:** 8.2.0 · **License:** GPLv3 · **Runs in:** DWSIM Python Script Unit Operation (IronPython/Python.NET) or plain Python 3
+**Version:** 8.3.0 · **License:** GPLv3 · **Runs in:** DWSIM Python Script Unit Operation (IronPython/Python.NET) or plain Python 3
 
 SWEQ calculates vapor–liquid equilibrium and ionic speciation of sour water
 ($NH_3 - H_2S - CO_2 - H_2O$) and performs an isothermal flash inside a DWSIM flowsheet.
@@ -25,7 +25,8 @@ CHANGELOG.md · ROADMAP.md
 | Chemical equilibria | NH4+ (Bates & Pinching 1949), CO2/HCO3− (Plummer & Busenberg 1982), H2S/HS−/Kw (Edwards-form correlations) |
 | Activity, NH4+/HS− and neutral NH3/H2S | Pitzer (Debye–Hückel + β0, β1, Cφ); neutral self-interaction from Rumpf et al. |
 | Activity, carbonate and S2− | Davies (fallback, valid to I ≈ 0.5 mol/kg) |
-| Vapor | Henry's law with activity coupling (ideal gas); water by Antoine × ideal osmotic activity |
+| Activity, ion–molecule | λ(NH3–NH4HS), λ(H2S–NH4HS), β1(NH4HS) regressed to Rumpf et al. 1999 (`validation/REGRESSION.md`) |
+| Vapor | Henry's law with activity coupling (ideal gas); H2S Henry from IUPAC SDS-32; water by Antoine × ideal osmotic activity |
 | Flash | PT-flash, Rachford–Rice with K-values from the electrolyte model |
 
 Convention: pH is the H+ **activity**; balances are in molality; each equilibrium uses each species' activity coefficient once.
@@ -45,22 +46,23 @@ python tests/test_limits.py      # or: pytest tests/
 python validation/validate.py    # regenerates validation/RESULTS.md
 ```
 
-Current results (v8.2.0, NH3–H2S–H2O, 293–363 K), average absolute deviation of partial pressures:
+Current results (v8.3.0, NH3–H2S–H2O, 293–393 K), average absolute deviation of partial pressures:
 
-| Data set | n | p(H2S) | p(NH3) |
-|---|---|---|---|
-| Oratovskii et al. 1964 (wt%, exact conversion) | 28 | 21.5 % | 26.3 % |
-| Leyko 1959 (mol/L, density assumed 1.0) | 14 | 41.0 % | 25.3 % |
-| *v8.1.0 on Oratovskii, for reference* | 28 | 99.6 % | 30.5 % |
+| Data set | n | p(H2S) | p(NH3) | role |
+|---|---|---|---|---|
+| Rumpf et al. 1999, 353 K isotherm | 23 | 18.6 % | 17.4 % | hold-out |
+| Rumpf et al. 1999, all isotherms | 64 | 16.1 % | 10.7 % | 313/393 K used in fit |
+| Leyko 1959 | 14 | 10.9 % | 12.7 % | independent |
+| Oratovskii et al. 1964 | 28 | 27.7 % | 35.6 % | independent (compiler-estimated pressures) |
+| *v8.2.0 on Rumpf 1999, for reference* | 64 | 81.6 % | 15.1 % | |
 
-**Read this before using the numbers:** the model is reasonable at moderate concentration and drifts at
-high concentration (H2S over-predicted, NH3 under-predicted). Treat results above ~3 mol/kg NH3 as
-qualitative until the Pitzer parameters are regressed (see ROADMAP). See `validation/RESULTS.md` for every point.
+The data sets disagree with each other at high concentration (see `validation/REGRESSION.md`).
+Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point is listed in `validation/RESULTS.md`.
 
 ## Known limitations
 
-* NH4+/HS− Pitzer parameters are constant (no temperature dependence) and have no cited source; ion–molecule
-  parameters (NH3–NH4HS, H2S–NH4HS) are missing.
+* β0 and Cφ of NH4HS are uncited legacy values; regressed parameters have no temperature dependence.
+* No carbamate (NH2COO−): NH3–CO2 systems (e.g. Kurz et al. 1995 data) cannot be represented yet.
 * Carbonate uses Davies; no Pitzer CO2 network yet.
 * Ideal vapor phase; isothermal only (no energy balance); no NH4HS solid.
 
@@ -69,5 +71,6 @@ qualitative until the Pitzer parameters are regressed (see ROADMAP). See `valida
 * Edwards, Maurer, Newman & Prausnitz (1978), AIChE J. 24, 966.
 * Bates & Pinching (1949), J. Res. Natl. Bur. Stand. 42, 419.
 * Plummer & Busenberg (1982), Geochim. Cosmochim. Acta 46, 1011.
-* Rumpf, Pérez-Salado Kamps, Sing & Maurer (1999), Fluid Phase Equilib. 158–160, 923.
+* Rumpf, Pérez-Salado Kamps, Sing & Maurer (1999), Fluid Phase Equilib. 158–160, 923 (reference data set).
+* Kurz, Rumpf & Maurer (1995), Fluid Phase Equilib. 104, 261 (NH3–CO2–H2O; not yet used).
 * Fogg & Young (eds.) (1988), IUPAC Solubility Data Series vol. 32, *Hydrogen Sulfide, Deuterium Sulfide and Hydrogen Selenide*.

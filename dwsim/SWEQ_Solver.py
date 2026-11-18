@@ -1,5 +1,5 @@
 """
-SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.2.0
+SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.3.0
 --------------------------------------------------------------------------------
 Thermodynamics: Edwards (1978) + PITZER MODEL (Rumpf et al., 1999)
 Activity: Pitzer specific interactions for NH3/H2S + Davies fallback for CO2
@@ -7,6 +7,12 @@ Henry's Law: Continuous Physical Scaling + Pitzer Activity Coupling
 Water Activity: Osmotic Mole Fraction Correction
 Stability: Successive Substitution Damping for Non-Linear Convergence
 Integration: Optimized for DWSIM Python Script Unit Operation
+
+Changelog v8.3.0:
+- FIX: H2S Henry constant temperature dependence from IUPAC SDS-32 correlation (was ~1.7x too
+  volatile at 393 K).
+- NEW: Ion-molecule Pitzer terms (NH3/H2S with NH4HS) and NH3 ternary term.
+- CHG: beta1(NH4HS), lambda(NH3-NH4HS), lambda(H2S-NH4HS) regressed to Rumpf et al. (1999).
 
 Changelog v8.2.0:
 - FIX: Henry constants for H2S/CO2 were solubilities (mol/kg/atm) used as
@@ -33,7 +39,7 @@ Release: Enterprise Extreme Concentration Edition (GPLv3 Only).
 
 import math
 
-__version__ = "8.2.0"
+__version__ = "8.3.0"
 import sys
 import os
 
@@ -78,11 +84,15 @@ PITZER_PARAMS = {
     
     # Ions NH4-HS (Standard Pitzer 1-1 Electrolyte at 25C reference)
     'beta0_NH4_HS':      [0.052, 0.0, 0.0], 
-    'beta1_NH4_HS':      [0.180, 0.0, 0.0], 
+    # v8.3.0: beta1 and the lambda terms regressed to Rumpf et al. (1999) 313 + 393 K
+    # (validation/regress.py); beta0 and Cphi kept from previous versions.
+    'beta1_NH4_HS':      [0.0178, 0.0, 0.0],
     'Cphi_NH4_HS':       [-0.001, 0.0, 0.0],
     # Ion-molecule interactions (lambda of NH3 / H2S with NH4+ and HS-, taken equal for both ions)
-    'lam_NH3_salt':      [0.0, 0.0, 0.0],
-    'lam_H2S_salt':      [0.0, 0.0, 0.0]
+    'lam_NH3_salt':      [-0.0181, 0.0, 0.0],
+    # Ternary NH3-NH3-NH3 (Rumpf et al. convention, sum over unordered triples)
+    'tau_NH3_NH3_NH3':   [0.0, 0.0, 0.0],
+    'lam_H2S_salt':      [-0.0184, 0.0, 0.0]
 }
 
 COMP_MAP = {
@@ -156,7 +166,8 @@ def get_pitzer_gammas(T_K, m_NH3, m_H2S, m_NH4, m_HS):
     ln_gamma_pm += 2.0 * (lam_N * m_NH3 + lam_S * m_H2S)
 
     # Neutral species: self-interaction + interaction with the ions
-    ln_gamma_NH3 = 2.0 * b0_A_A * m_NH3 + 2.0 * lam_N * (m_NH4 + m_HS)
+    tau_N = calc_pitzer_p(PITZER_PARAMS['tau_NH3_NH3_NH3'], T_K)
+    ln_gamma_NH3 = 2.0 * b0_A_A * m_NH3 + 3.0 * tau_N * m_NH3**2 + 2.0 * lam_N * (m_NH4 + m_HS)
     ln_gamma_H2S = 2.0 * b0_S_S * m_H2S + 2.0 * lam_S * (m_NH4 + m_HS)
     
     # Safety caps
@@ -235,6 +246,15 @@ def literature_K(T_K):
     logK2 = -107.8871 - 0.03252849*T_K + 5151.79/T_K + 38.92561*lT - 563713.9/T_K**2
     return {'NH3': 10**pKa_nh4, 'CO2': 10**logK1, 'HCO3': 10**logK2}
 
+def henry_h2s(T_K):
+    """H2S Henry volatility, atm*kg/mol, from the IUPAC-evaluated solubility of H2S in water at
+    p(H2S) = 1 atm: ln x = -24.912 + 3477.1/T + 0.3993 ln T + 0.015700 T
+    (Fogg & Young, IUPAC Solubility Data Series vol. 32, 1988). Replaces a constant-enthalpy
+    van 't Hoff form that was ~1.7x too volatile at 393 K."""
+    x = math.exp(-24.912 + 3477.1 / T_K + 0.3993 * math.log(T_K) + 0.015700 * T_K)
+    m = x / ((1.0 - x) * CONST['MW']['H2O'] / 1000.0)
+    return 1.0 / m
+
 def calculate_equilibrium(T_K, m_in):
     if T_K < 273.15: raise ValueError("SWEQ: temperature below 0 C")
     T_R = T_K * 1.8
@@ -258,7 +278,7 @@ def calculate_equilibrium(T_K, m_in):
     
     # Henry's Law with Pitzer Activities
     p_nh3 = (CONST['H_REF']['NH3'] * nh3 * spec['g_NH3'] * math.exp(CONST['H_SCALE']['NH3'] * inv_T_term)) * CONST['ATM_TO_PSI']
-    p_h2s = (CONST['H_REF']['H2S'] * h2s * spec['g_H2S'] * math.exp(CONST['H_SCALE']['H2S'] * inv_T_term)) * CONST['ATM_TO_PSI']
+    p_h2s = (henry_h2s(T_K) * h2s * spec['g_H2S']) * CONST['ATM_TO_PSI']
     p_co2 = (CONST['H_REF']['CO2'] * co2 * 1.0 * math.exp(CONST['H_SCALE']['CO2'] * inv_T_term)) * CONST['ATM_TO_PSI']
     
     # Water Activity (Osmotic Depression)
@@ -296,7 +316,7 @@ def generate_report(res, T, P_op, flows_h, total_h, rho):
     h2s_mgL = (l['H2S'] + l['HS'] + l['S']) * CONST['MW']['H2S'] * rho_kg_L * 1000.0
     nh3_mgL = (l['NH3'] + l['NH4']) * CONST['MW']['NH3'] * rho_kg_L * 1000.0
 
-    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.2.0 ".center(W), " Edwards / Pitzer (NH4HS) + Davies (carbonate) ".center(W), HR]
+    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.3.0 ".center(W), " Edwards / Pitzer (NH4HS) + Davies (carbonate) ".center(W), HR]
     try: lines.append(" Date: %s " % DateTime.Now.ToString("yyyy-MM-dd HH:mm").center(W))
     except: pass
     lines.append("\n 1. EXECUTIVE SUMMARY & SAFETY CHECK ".ljust(W))

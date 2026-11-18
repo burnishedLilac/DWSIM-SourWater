@@ -8,8 +8,9 @@ The evolution of SWEQ follows a rigorous chemical engineering progression: from 
 - [x] **Activity-Coupled Henry's Law:** Exact integration of liquid non-ideality into vapor partial pressure calculations.
 
 ### Phase 2: Parameter Regression & Thermodynamic Completeness (v8.5)
-- [ ] **Regress NH4+/HS− and ion–molecule Pitzer parameters** with temperature dependence against published data (current AAD 20–40 %, see `validation/RESULTS.md`); keep a hold-out data set.
-- [ ] **More validation data:** Rumpf et al. 1999, Kurz et al. 1995, CO2-containing systems.
+- [x] **Regress NH4+/HS− and ion–molecule Pitzer parameters** *(v8.3, Rumpf 1999; temperature dependence still open)* with temperature dependence against published data (current AAD 20–40 %, see `validation/RESULTS.md`); keep a hold-out data set.
+- [x] Rumpf et al. 1999 added as reference data.
+- [ ] **Carbamate + NH3–CO2 validation:** add NH2COO− and validate against Kurz et al. 1995 (PDF available).
 - [ ] **Density Engine Overhaul:** Replace infinite dilution empirical volumes with the rigorous Laliberté (2007/2009) density model for aqueous electrolytes.
 - [ ] **Carbonate Matrix Expansion:** Implement Pitzer interaction parameters for $CO_2 / HCO_3^-$ to replace the current Davies fallback network.
 - [ ] **Rigorous Water Activity:** Upgrade the current osmotic mole fraction approximation to full Pitzer osmotic coefficient ($\phi$) calculations.
