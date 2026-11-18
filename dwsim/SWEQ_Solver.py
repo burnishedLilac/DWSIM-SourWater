@@ -32,6 +32,8 @@ Release: Enterprise Extreme Concentration Edition (GPLv3 Only).
 """
 
 import math
+
+__version__ = "8.2.0"
 import sys
 import os
 

@@ -1,9 +1,9 @@
 """Sanity checks for SWEQ against textbook limiting values.
-Run: python tests/validate.py   (no DWSIM needed)
+Run: python tests/test_limits.py   or   pytest tests/   (no DWSIM needed)
 These are limiting-case checks, NOT a validation against sour-water VLE data
 (API SWEQ tables, Rumpf 1999, Kurz 1995) - that is still pending."""
 import math, os, sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'dwsim'))
 import SWEQ_Solver as S
 
 def eq(T, nh3=0.0, h2s=0.0, co2=0.0):
@@ -38,5 +38,9 @@ check("Flash 80C/0.7atm: component balance error (mol)", bal, 0.0, 1e-6)
 check("Flash 80C/0.7atm: P_bubble of liquid = P_op (atm)", res['P_bubble']/101325.0, 0.7, 1e-4)
 print("V/F = %.5f  y = %s" % (V/sum(n.values()), {k: round(v, 4) for k, v in (y or {}).items()}))
 
-print("\n%d/%d checks passed" % (sum(checks), len(checks)))
-sys.exit(0 if all(checks) else 1)
+def test_all_limits():
+    assert all(checks), "some limiting-case checks failed (see output)"
+
+if __name__ == "__main__":
+    print("\n%d/%d checks passed" % (sum(checks), len(checks)))
+    sys.exit(0 if all(checks) else 1)
