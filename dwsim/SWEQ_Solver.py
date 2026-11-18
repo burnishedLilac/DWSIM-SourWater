@@ -79,7 +79,10 @@ PITZER_PARAMS = {
     # Ions NH4-HS (Standard Pitzer 1-1 Electrolyte at 25C reference)
     'beta0_NH4_HS':      [0.052, 0.0, 0.0], 
     'beta1_NH4_HS':      [0.180, 0.0, 0.0], 
-    'Cphi_NH4_HS':       [-0.001, 0.0, 0.0]
+    'Cphi_NH4_HS':       [-0.001, 0.0, 0.0],
+    # Ion-molecule interactions (lambda of NH3 / H2S with NH4+ and HS-, taken equal for both ions)
+    'lam_NH3_salt':      [0.0, 0.0, 0.0],
+    'lam_H2S_salt':      [0.0, 0.0, 0.0]
 }
 
 COMP_MAP = {
@@ -147,9 +150,14 @@ def get_pitzer_gammas(T_K, m_NH3, m_H2S, m_NH4, m_HS):
     # Mean ionic activity coefficient (Standard Pitzer 1-1)
     ln_gamma_pm = f_I + m * B_gamma + (m**2) * C_gamma
     
-    # Neutral species (Simplified)
-    ln_gamma_NH3 = 2.0 * b0_A_A * m_NH3 
-    ln_gamma_H2S = 2.0 * b0_S_S * m_H2S
+    # Ion-molecule terms (Pitzer lambda_n,c = lambda_n,a = lam)
+    lam_N = calc_pitzer_p(PITZER_PARAMS['lam_NH3_salt'], T_K)
+    lam_S = calc_pitzer_p(PITZER_PARAMS['lam_H2S_salt'], T_K)
+    ln_gamma_pm += 2.0 * (lam_N * m_NH3 + lam_S * m_H2S)
+
+    # Neutral species: self-interaction + interaction with the ions
+    ln_gamma_NH3 = 2.0 * b0_A_A * m_NH3 + 2.0 * lam_N * (m_NH4 + m_HS)
+    ln_gamma_H2S = 2.0 * b0_S_S * m_H2S + 2.0 * lam_S * (m_NH4 + m_HS)
     
     # Safety caps
     ln_gamma_pm = max(min(ln_gamma_pm, 10.0), -10.0)
