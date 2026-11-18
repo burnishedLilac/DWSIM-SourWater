@@ -65,7 +65,11 @@ deviation from Rumpf 1999 measurements, p_total / p(NH3) / p(H2S):
 | 80 °C, 6.0 m NH3, 2.5 m H2S (SWEQ hold-out) | +1 % / −38 % / +39 % | −5 % / −16 % / +3 % |
 | 120 °C, 3.2 m NH3, 1.1 m H2S (in SWEQ fit) | +12 % / −10 % / +58 % | −2 % / +1 % / +1 % |
 
-Only two measured points so far; the built-in package over-predicts p(H2S) systematically in all five conditions tested.
+| 80 °C, same point, DWSIM **NRTL** (no electrolyte chemistry) | +364 % / +652 % / +366 % | |
+
+Only two measured points so far. The built-in Sour Water package is part of DWSIM's Patreon edition and over-predicts
+p(H2S) in all five conditions tested; a non-electrolyte model such as NRTL ignores NH3 + H2S ⇌ NH4⁺ + HS⁻ and
+over-predicts all pressures 4–8×.
 
 The data sets disagree with each other at high concentration (see `validation/REGRESSION.md`).
 Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point is listed in `validation/RESULTS.md`.

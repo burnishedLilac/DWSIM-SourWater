@@ -8,7 +8,9 @@ import SWEQ_Solver as S
 RUMPF = {'353.14K m_NH3=6.010 m_H2S=2.539': (1.568, 0.537, 0.607),
          '393.14K m_NH3=3.210 m_H2S=1.056': (4.113, 0.984, 1.186)}   # p_total, p_NH3, p_H2S (bar), Table 1
 f = 0.0689476
-rows = [r for r in csv.DictReader(l for l in open(os.path.join(HERE, 'data', 'dwsim_native_sourwater.csv')) if not l.startswith('#'))]
+def load(name):
+    return [r for r in csv.DictReader(l for l in open(os.path.join(HERE, 'data', name)) if not l.startswith('#'))]
+rows = load('dwsim_native_sourwater.csv')
 print("%-6s %-8s | %-27s | %-27s | %-27s" % ("T(C)", "case", "measured P / pNH3 / pH2S", "DWSIM native", "SWEQ " + S.__version__))
 for r in rows:
     T = float(r['T_C']) + 273.15; xw = float(r['x_H2O']); kw = xw * S.CONST['MW']['H2O'] / 1000
@@ -23,3 +25,9 @@ for r in rows:
     if ref:
         dev = lambda t: " ".join("%+.0f%%" % (100 * (a / b - 1)) for a, b in zip(t, ref))
         print("%-15s | %-27s | %-27s | %-27s" % ("", "deviation vs measured:", dev(nat), dev(swq)))
+
+print("\nWithout electrolyte chemistry (DWSIM NRTL), same 80 C Rumpf point:")
+for r in load('dwsim_nrtl.csv'):
+    P = float(r['P_bubble_bar']); ref = RUMPF[r['rumpf_ref']]
+    nrtl = (P, P * float(r['y_NH3']), P * float(r['y_H2S']))
+    print("  NRTL %.3f / %.3f / %.3f bar  ->  %s of measured" % (nrtl + (" ".join("%.1fx" % (a / b) for a, b in zip(nrtl, ref)),)))
