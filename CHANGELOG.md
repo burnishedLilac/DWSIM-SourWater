@@ -4,6 +4,7 @@
 
 ### Fixed
 - A feed above its dew point raised "feed fully vaporizes" and stopped the flowsheet; it now goes entirely to the vapor outlet (`oms2`).
+- Outlet 2 (vapor) is optional when nothing vaporizes; a clear message asks for it when it is needed (was `NameError: oms2`).
 
 ## [8.3.0] — 2026-11-18
 
