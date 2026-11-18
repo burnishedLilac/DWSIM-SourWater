@@ -9,3 +9,8 @@ __pycache__/
 
 # Windows thumbnails
 Thumbs.db
+__pycache__/
+*.pyc
+.pytest_cache/
+SWEQ_Datasheet.txt
+validation/fitted_params.json

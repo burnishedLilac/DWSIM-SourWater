@@ -2,18 +2,21 @@
 
 The evolution of SWEQ follows a rigorous chemical engineering progression: from a basic aqueous speciation script to a full-fledged multiphase process simulator. The roadmap below outlines the strategic direction for future releases.
 
-### Phase 1: Core Engine Stabilization (Current - v8.1)
+### Phase 1: Core Engine Stabilization (done - v8.2)
 - [x] **Pitzer Model Integration:** Implemented specific interaction parameters for the $NH_3-H_2S$ system at extreme concentrations.
 - [x] **Convergence Damping:** Added Successive Substitution relaxation to prevent solver oscillation at high ionic strengths.
 - [x] **Activity-Coupled Henry's Law:** Exact integration of liquid non-ideality into vapor partial pressure calculations.
 
-### Phase 2: Thermodynamic Completeness (v8.5)
+### Phase 2: Parameter Regression & Thermodynamic Completeness (v8.5)
+- [x] **Regress NH4+/HS− and ion–molecule Pitzer parameters** *(v8.3, Rumpf 1999; temperature dependence still open)* with temperature dependence against published data (current AAD 20–40 %, see `validation/RESULTS.md`); keep a hold-out data set.
+- [x] Rumpf et al. 1999 added as reference data.
+- [ ] **Carbamate + NH3–CO2 validation:** add NH2COO− and validate against Kurz et al. 1995 (PDF available).
 - [ ] **Density Engine Overhaul:** Replace infinite dilution empirical volumes with the rigorous Laliberté (2007/2009) density model for aqueous electrolytes.
 - [ ] **Carbonate Matrix Expansion:** Implement Pitzer interaction parameters for $CO_2 / HCO_3^-$ to replace the current Davies fallback network.
 - [ ] **Rigorous Water Activity:** Upgrade the current osmotic mole fraction approximation to full Pitzer osmotic coefficient ($\phi$) calculations.
 
 ### Phase 3: Rigorous VLE & Energy Balances (v9.0)
-- [ ] **Isothermal Flash (PT-Flash):** Implement the Rachford-Rice algorithm to calculate exact vapor-liquid fractions ($V/F$) and composition when system pressure drops below the bubble point.
+- [x] **Isothermal Flash (PT-Flash):** *(v8.2)* Implement the Rachford-Rice algorithm to calculate exact vapor-liquid fractions ($V/F$) and composition when system pressure drops below the bubble point.
 - [ ] **Vapor Phase Non-Ideality:** Integrate a cubic Equation of State (e.g., Peng-Robinson or SRK) to calculate vapor fugacity coefficients ($\hat{\phi}_i$), replacing the current ideal gas assumption at high pressures.
 - [ ] **Enthalpy & Heat of Reaction:** Formulate partial molar enthalpies and heat of reaction for ionic species to enable Adiabatic Flash (PH-Flash) and precise temperature drop predictions across expansion valves.
 
