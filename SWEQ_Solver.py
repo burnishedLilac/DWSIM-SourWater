@@ -1,5 +1,5 @@
 """
-SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.0.0
+SOUR WATER EQUILIBRIUM SOLVER (SWEQ) - v8.2.0
 --------------------------------------------------------------------------------
 Thermodynamics: Edwards (1978) + PITZER MODEL (Rumpf et al., 1999)
 Activity: Pitzer specific interactions for NH3/H2S + Davies fallback for CO2
@@ -7,6 +7,19 @@ Henry's Law: Continuous Physical Scaling + Pitzer Activity Coupling
 Water Activity: Osmotic Mole Fraction Correction
 Stability: Successive Substitution Damping for Non-Linear Convergence
 Integration: Optimized for DWSIM Python Script Unit Operation
+
+Changelog v8.2.0:
+- FIX: Henry constants for H2S/CO2 were solubilities (mol/kg/atm) used as
+  volatilities (atm*kg/mol); partial pressures were ~100x (H2S) and ~900x (CO2) low.
+- FIX: Consistent activity convention: a(H+) = 10^-pH; each equilibrium now uses
+  the activity coefficient of each species once (no double gamma^2 on H2S/CO2/Kw,
+  added missing gamma(NH4+)). Charge balance now in molality (m_H = a_H/gamma).
+- NEW: Isothermal PT-flash (Rachford-Rice-style bisection on vapor flow) at the
+  operating pressure. oms1 = liquid, oms2 = vapor (as documented).
+- CHG: Errors are no longer silently swallowed; they are raised to the DWSIM log.
+- FIX: NH4+ and CO2/HCO3- constants replaced (Bates & Pinching; Plummer & Busenberg);
+  previous values were ~0.46 pK units off at 25 C.
+- CHG: Report is written to disk but no longer auto-opened (OPEN_REPORT flag).
 
 Changelog v8.0.0:
 - MAJOR UPGRADE: Replaced global Davies model with Pitzer species-specific model.
@@ -30,7 +43,9 @@ CONST = {
     'ATM_TO_PA': 101325.0,
     'ATM_TO_PSI': 14.6959,
     'MW': {'NH3': 17.031, 'H2S': 34.08, 'CO2': 44.01, 'H2O': 18.015},
-    'H_REF': {'NH3': 0.016, 'H2S': 0.10, 'CO2': 0.034},
+    # Henry volatility at 298.15 K, atm*kg/mol (= 1 / solubility constant, Sander compilation)
+    # NH3 ~ 1/59, H2S ~ 1/0.10, CO2 ~ 1/0.034
+    'H_REF': {'NH3': 1.0/59.0, 'H2S': 1.0/0.10, 'CO2': 1.0/0.034},
     'H_SCALE': {'NH3': 4100.0, 'H2S': 2100.0, 'CO2': 2400.0}
 }
 
@@ -38,8 +53,11 @@ SOLVER = {
     'TOL_CHARGE': 1e-9, 'TOL_IONIC': 1e-6,
     'MAX_ITER_PH': 350, 'MAX_ITER_ION': 100, # Increased for Pitzer stability
     'MIN_VAL': 1e-18,
-    'CO2_DAVIES_WARN': 0.5 # We still track CO2 limits
+    'CO2_DAVIES_WARN': 0.5, # We still track CO2 limits
+    'MAX_ITER_FLASH': 200, 'TOL_FLASH': 1e-7
 }
+
+OPEN_REPORT = False  # True = open the datasheet after each run (Windows)
 
 EDWARDS_PARAMS = {
     'NH3':   [1.587,   11160.0,   0.0,         0.0,        0.0],
@@ -89,6 +107,7 @@ def get_activity_coefficients(I, A):
     if I < 1e-11: return 1.0, 1.0
     sqI = math.sqrt(I)
     f = -A * (sqI / (1.0 + sqI) - 0.3 * I)
+    f = max(min(f, 2.0), -2.0)  # Davies is meaningless beyond I ~ 0.5; keep numerics bounded
     return 10**f, 10**(f * 4)
 
 def calc_pitzer_p(q, T_K):
@@ -138,72 +157,79 @@ def get_pitzer_gammas(T_K, m_NH3, m_H2S, m_NH4, m_HS):
     return math.exp(ln_gamma_NH3), math.exp(ln_gamma_H2S), math.exp(ln_gamma_pm)
 
 def solve_charge_balance(T_K, ph, K, molals, A_davies):
-    h_ion = max(10**(-ph), SOLVER['MIN_VAL'])
+    """Speciation at fixed pH. Convention: a_H = 10^-pH (activity).
+    Concentrations are molalities; each equilibrium uses each species' gamma once.
+    gamma(+1/-1 ions of NH4/HS) = Pitzer mean gamma; other ions = Davies."""
+    a_h = max(10**(-ph), SOLVER['MIN_VAL'])
     m_NH3_total, m_H2S_total, m_CO2_total = molals
-    
-    # Initial Guesses
+
     g1_davies, g2_davies = 1.0, 1.0
     g_NH3, g_H2S, g_pm = 1.0, 1.0, 1.0
     nh3_aq, h2s_aq = m_NH3_total, m_H2S_total
     nh4_ion, hs_ion = 0.0, 0.0
-    
     ionic_strength = 0.0
     prev_I = -1.0
-    
+    w = 0.5  # damping
+
     for _ in range(SOLVER['MAX_ITER_ION']):
         if abs(ionic_strength - prev_I) < SOLVER['TOL_IONIC']: break
         prev_I = ionic_strength
 
-        # 1. PITZER & DAVIES CALCULATIONS
         g_NH3_new, g_H2S_new, g_pm_new = get_pitzer_gammas(T_K, nh3_aq, h2s_aq, nh4_ion, hs_ion)
         g1_dav_new, g2_dav_new = get_activity_coefficients(ionic_strength, A_davies)
-        
-        # DAMPING: Successive substitution to prevent non-linear oscillation
-        w = 0.5 
         g_NH3 = w * g_NH3 + (1-w) * g_NH3_new
         g_H2S = w * g_H2S + (1-w) * g_H2S_new
         g_pm = w * g_pm + (1-w) * g_pm_new
         g1_davies = w * g1_davies + (1-w) * g1_dav_new
         g2_davies = w * g2_davies + (1-w) * g2_dav_new
 
-        # 1. AMMONIA (Pitzer Coupled)
-        k_ka_nh4_thermo = 1.0 / K['NH3'] 
-        k_ka_nh4_app = k_ka_nh4_thermo / g_NH3
-        nh4_ion = m_NH3_total / (1.0 + (k_ka_nh4_app / h_ion))
-        nh3_aq = m_NH3_total - nh4_ion
-        
-        # 3. SULFIDE (Pitzer Coupled)
-        k_h2s_app = K['H2S'] * g_H2S / (g_pm**2)
-        k_hs_app  = K['HS'] / g2_davies # S-- uses Davies fallback
-        den_s = 1.0 + (k_h2s_app/h_ion) + (k_h2s_app * k_hs_app / (h_ion**2))
-        h2s_aq = m_H2S_total / den_s
-        hs_ion = h2s_aq * (k_h2s_app / h_ion)
-        s_ion = hs_ion * (k_hs_app / h_ion)
-        
-        # 4. CARBONATE (Davies Fallback)
-        k_co2_app = K['CO2'] / (g1_davies**2)
-        k_hco3_app = K['HCO3'] / g2_davies
-        den_c = 1.0 + (k_co2_app/h_ion) + (k_co2_app * k_hco3_app / (h_ion**2))
-        co2_aq = m_CO2_total / den_c
-        hco3_ion = co2_aq * (k_co2_app / h_ion)
-        co3_ion = hco3_ion * (k_hco3_app / h_ion)
-        
-        # 5. WATER
-        k_kw_app = K['Kw'] / (g_pm**2)
-        oh_ion = k_kw_app / h_ion
-        
+        # AMMONIA: NH4+ <=> NH3 + H+ ; Ka = a_NH3 a_H / a_NH4
+        ka_nh4 = 1.0 / K['NH3']
+        r_nh4 = (g_NH3 * a_h) / (ka_nh4 * g_pm)          # m_NH4 / m_NH3
+        nh3_aq = m_NH3_total / (1.0 + r_nh4)
+        nh4_ion = m_NH3_total - nh3_aq
+
+        # SULFIDE: H2S <=> H+ + HS- ; HS- <=> H+ + S--
+        r1 = K['H2S'] * g_H2S / (g_pm * a_h)              # m_HS / m_H2S
+        r2 = K['HS'] * g_pm / (g2_davies * a_h)           # m_S / m_HS
+        h2s_aq = m_H2S_total / (1.0 + r1 + r1*r2)
+        hs_ion = h2s_aq * r1
+        s_ion = hs_ion * r2
+
+        # CARBONATE (Davies): CO2 + H2O <=> H+ + HCO3- ; HCO3- <=> H+ + CO3--
+        c1 = K['CO2'] / (g1_davies * a_h)
+        c2 = K['HCO3'] * g1_davies / (g2_davies * a_h)
+        co2_aq = m_CO2_total / (1.0 + c1 + c1*c2)
+        hco3_ion = co2_aq * c1
+        co3_ion = hco3_ion * c2
+
+        # WATER: Kw = a_H a_OH
+        oh_ion = K['Kw'] / (g1_davies * a_h)
+        h_ion = a_h / g1_davies
+
         ionic_strength = 0.5 * (h_ion + oh_ion + nh4_ion + hs_ion + hco3_ion + 4.0*s_ion + 4.0*co3_ion)
-        
+
     error = (h_ion + nh4_ion) - (oh_ion + hs_ion + 2.0*s_ion + hco3_ion + 2.0*co3_ion)
-    spec = {'NH3': nh3_aq, 'NH4': nh4_ion, 'H2S': h2s_aq, 'HS': hs_ion, 'S': s_ion, 
-            'CO2': co2_aq, 'HCO3': hco3_ion, 'CO3': co3_ion, 'I': ionic_strength,
-            'g_NH3': g_NH3, 'g_H2S': g_H2S, 'g_pm': g_pm, 'g_dav': g1_davies}
+    spec = {'NH3': nh3_aq, 'NH4': nh4_ion, 'H2S': h2s_aq, 'HS': hs_ion, 'S': s_ion,
+            'CO2': co2_aq, 'HCO3': hco3_ion, 'CO3': co3_ion, 'H': h_ion, 'OH': oh_ion,
+            'I': ionic_strength, 'g_NH3': g_NH3, 'g_H2S': g_H2S, 'g_pm': g_pm, 'g_dav': g1_davies}
     return error, spec
 
+def literature_K(T_K):
+    """Replacements for Edwards-form constants that were ~0.46 pK off at 25 C.
+    NH4+ : Bates & Pinching (1949)   pKa = 0.09018 + 2729.92/T
+    CO2/HCO3- : Plummer & Busenberg (1982)"""
+    lT = math.log10(T_K)
+    pKa_nh4 = 0.09018 + 2729.92 / T_K
+    logK1 = -356.3094 - 0.06091964*T_K + 21834.37/T_K + 126.8339*lT - 1684915.0/T_K**2
+    logK2 = -107.8871 - 0.03252849*T_K + 5151.79/T_K + 38.92561*lT - 563713.9/T_K**2
+    return {'NH3': 10**pKa_nh4, 'CO2': 10**logK1, 'HCO3': 10**logK2}
+
 def calculate_equilibrium(T_K, m_in):
-    if T_K < 273.15: return {'error': "Temp Error"}
+    if T_K < 273.15: raise ValueError("SWEQ: temperature below 0 C")
     T_R = T_K * 1.8
     K_vals = {k: math.exp(calc_ln_k(v, T_R)) for k, v in EDWARDS_PARAMS.items()}
+    K_vals.update(literature_K(T_K))  # K['NH3'] = 1/Ka(NH4+)
     A_davies = calc_davies_A(T_K)
     
     low, high = 0.0, 14.0
@@ -226,6 +252,7 @@ def calculate_equilibrium(T_K, m_in):
     p_co2 = (CONST['H_REF']['CO2'] * co2 * 1.0 * math.exp(CONST['H_SCALE']['CO2'] * inv_T_term)) * CONST['ATM_TO_PSI']
     
     # Water Activity (Osmotic Depression)
+    # Ideal (phi = 1) osmotic approximation
     sum_moles = sum([v for k,v in spec.items() if k not in ['I', 'g_NH3', 'g_H2S', 'g_pm', 'g_dav']])
     a_w = math.exp(-0.018015 * sum_moles)
     
@@ -259,10 +286,9 @@ def generate_report(res, T, P_op, flows_h, total_h, rho):
     h2s_mgL = (l['H2S'] + l['HS'] + l['S']) * CONST['MW']['H2S'] * rho_kg_L * 1000.0
     nh3_mgL = (l['NH3'] + l['NH4']) * CONST['MW']['NH3'] * rho_kg_L * 1000.0
 
-    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.0.0 ".center(W), " Enterprise Edition - Pitzer Engine Active ".center(W), HR]
+    lines = [HR, " SWEQ - SOUR WATER EQUILIBRIUM SOLVER v8.2.0 ".center(W), " Edwards / Pitzer (NH4HS) + Davies (carbonate) ".center(W), HR]
     try: lines.append(" Date: %s " % DateTime.Now.ToString("yyyy-MM-dd HH:mm").center(W))
     except: pass
-    lines.append((" User: %-16s Model: Edwards/Pitzer (Rumpf 1999) " % "Alexander").center(W))
     lines.append("\n 1. EXECUTIVE SUMMARY & SAFETY CHECK ".ljust(W))
     lines.append(SR)
     lines.append(" STATUS: " + ("!!! FLASHING DETECTED !!!" if is_f else "STABLE LIQUID"))
@@ -301,91 +327,125 @@ def generate_report(res, T, P_op, flows_h, total_h, rho):
     lines.append(" Density:   %15.2f kg/m3     | p(CO2): %10.4f psia" % (rho, pp['CO2']))
     lines.append("                                        | p(H2O): %10.4f psia" % (pp['H2O']))
 
+    if res.get('V_frac') is not None:
+        lines.append("\n Flash @ operating P: vapor fraction (molar) = %.6f" % res['V_frac'])
     if (l['CO2'] + l['HCO3']) > SOLVER['CO2_DAVIES_WARN']:
         lines.append("\n > Note: High CO2 detected. Carbonate interactions using Davies fallback.")
         
     lines.append(HR + "\n End of Report")
     return "\n".join(lines)
 
-# --- 5. MAIN BRIDGE ---
+# --- 5. PT FLASH ---
+
+KEYS = ['NH3', 'H2S', 'CO2', 'H2O']
+
+def bubble_from_moles(T_K, n):
+    """n: mol of each key in liquid. Returns equilibrium result (P_bubble, pp in psia)."""
+    kg_w = n['H2O'] * CONST['MW']['H2O'] / 1000.0
+    molals = {k: n[k] / kg_w for k in ['NH3', 'H2S', 'CO2']}
+    return calculate_equilibrium(T_K, molals)
+
+def _rachford_rice(z, K):
+    g = lambda b: sum(z[k]*(K[k]-1.0)/(1.0+b*(K[k]-1.0)) for k in KEYS)
+    if g(0.0) <= 0: return 0.0
+    if g(1.0) >= 0: return 1.0
+    lo, hi = 0.0, 1.0
+    for _ in range(200):
+        mid = 0.5*(lo+hi)
+        if g(mid) > 0: lo = mid
+        else: hi = mid
+    return 0.5*(lo+hi)
+
+def pt_flash(T_K, P_Pa, n_feed):
+    """Isothermal flash: Rachford-Rice with K_i = y_i/x_i updated by successive
+    substitution from the electrolyte model (K_i = p_i / (P x_i)).
+    Mass balance is exact by construction. Returns (V, y, L_moles, res_liquid)."""
+    F = sum(n_feed.values())
+    z = {k: n_feed[k]/F for k in KEYS}
+    res = bubble_from_moles(T_K, n_feed)
+    if res['P_bubble'] <= P_Pa:
+        return 0.0, None, dict(n_feed), res
+    psi_P = P_Pa / CONST['PSI_TO_PA']
+    def k_values(res, x):
+        return {k: max((res['pp'][k]/psi_P) / max(x[k], 1e-30), 1e-12) for k in KEYS}
+    K = k_values(res, z)
+    beta = 0.0
+    for _ in range(SOLVER['MAX_ITER_FLASH']):
+        beta = _rachford_rice(z, K)
+        if beta >= 1.0:
+            raise ValueError("SWEQ: feed fully vaporizes at this T/P (outside model range)")
+        x = {k: z[k]/(1.0+beta*(K[k]-1.0)) for k in KEYS}
+        sx = sum(x.values()); x = {k: v/sx for k, v in x.items()}
+        L = {k: F*(1.0-beta)*x[k] for k in KEYS}
+        res = bubble_from_moles(T_K, L)
+        K_new = k_values(res, x)
+        d = max(abs(math.log(K_new[k]/K[k])) for k in KEYS)
+        K = {k: math.exp(0.5*math.log(K[k]) + 0.5*math.log(K_new[k])) for k in KEYS}
+        if d < 1e-8: break
+    V = F*beta
+    y = {k: K[k]*x[k] for k in KEYS}
+    sy = sum(y.values()); y = {k: v/sy for k, v in y.items()}
+    L = {k: n_feed[k] - V*y[k] for k in KEYS}
+    return V, y, L, bubble_from_moles(T_K, L)
+
+# --- 6. MAIN BRIDGE (DWSIM) ---
 
 def Main():
-    try:
-        if 'ims1' not in globals() or 'oms1' not in globals():
-            return 
-        
+    T = ims1.GetTemperature()
+    P_op = ims1.GetPressure()
+    F_mol = ims1.GetMolarFlow()
+    comp = ims1.GetOverallComposition()
+    ids = list(ims1.ComponentIds)
+
+    if F_mol < SOLVER['MIN_VAL']: return
+
+    n = {k: 0.0 for k in KEYS}
+    idx = {}
+    for i, name in enumerate(ids):
+        nc = name.lower()
+        for k, tags in COMP_MAP.items():
+            if any(t in nc for t in tags):
+                n[k] = F_mol * comp[i]; idx[k] = i
+                break
+    if n['H2O'] < SOLVER['MIN_VAL']:
+        raise ValueError("SWEQ: no water found in inlet stream")
+    unmapped = [ids[i] for i in range(len(ids)) if i not in idx.values() and comp[i] > 1e-6]
+    if unmapped:
+        raise ValueError("SWEQ: unsupported components in feed: %s" % ", ".join(unmapped))
+
+    V, y, L, res = pt_flash(T, P_op, n)
+    Lt = sum(L.values())
+
+    x_full = [0.0] * len(ids); y_full = [0.0] * len(ids)
+    for k, i in idx.items():
+        x_full[i] = L[k] / Lt
+        if y: y_full[i] = y[k]
+
+    oms1.SetTemperature(T); oms1.SetPressure(P_op)
+    oms1.SetOverallComposition(Array[Double](x_full))
+    oms1.SetMolarFlow(Lt)
+
+    oms2.SetTemperature(T); oms2.SetPressure(P_op)
+    oms2.SetOverallComposition(Array[Double](y_full if y else x_full))
+    oms2.SetMolarFlow(V if V > 0 else 0.0)
+
+    oms1.Calculate(); oms2.Calculate()
+
+    res['V_frac'] = V / F_mol
+    m_kg_s = {k: v * CONST['MW'][k] / 1000.0 for k, v in L.items()}
+    kg_w = m_kg_s['H2O']
+    rho = calculate_density(T, P_op, res['liq'], kg_w, sum(m_kg_s.values()))
+    report_str = generate_report(res, T, P_op, {k: m*3600 for k, m in m_kg_s.items()}, sum(m_kg_s.values())*3600, rho)
+
+    for folder in [os.path.join(os.path.expanduser('~'), 'Desktop'), 'C:\\Temp']:
         try:
-            T = ims1.GetTemperature()
-            P_op = ims1.GetPressure()
-            F_mol = ims1.GetMolarFlow()
-            comp = ims1.GetOverallComposition()
-            ids = ims1.ComponentIds
-        except:
-            return 
+            if not os.path.exists(folder): os.makedirs(folder)
+            path = os.path.join(folder, 'SWEQ_Datasheet.txt')
+            with open(path, 'w') as fh: fh.write(report_str)
+            if OPEN_REPORT and os.name == 'nt': os.startfile(path)
+            break
+        except (IOError, OSError):
+            continue
 
-        if F_mol < SOLVER['MIN_VAL']: return
-        
-        m_mol_s = {'NH3': 0.0, 'H2S': 0.0, 'CO2': 0.0, 'H2O': 0.0}
-        idx = {}
-        for i, n in enumerate(ids):
-            nc = n.lower()
-            for k, tags in COMP_MAP.items():
-                if any(t in nc for t in tags): 
-                    m_mol_s[k] = F_mol * comp[i]
-                    idx[k] = i
-                    break
-        
-        if m_mol_s['H2O'] < SOLVER['MIN_VAL']: return
-
-        # Calculation
-        kg_w = m_mol_s['H2O'] * CONST['MW']['H2O'] / 1000.0
-        molals = {k: v / kg_w for k, v in m_mol_s.items() if k != 'H2O'}
-        
-        res = calculate_equilibrium(T, molals)
-        if res.get('error'): return
-
-        # Update Streams
-        P_out = min(res['P_bubble'], 1500 * CONST['ATM_TO_PA'])
-        
-        y_raw = [0.0] * len(ids)
-        for k, i in idx.items():
-            if k in res['pp']: 
-                y_raw[i] = (res['pp'][k] * CONST['PSI_TO_PA']) / P_out
-        
-        total_y = sum(y_raw)
-        y_norm = [v/total_y if total_y > 0 else comp[i] for v in y_raw]
-        
-        oms1.SetTemperature(T)
-        oms1.SetPressure(P_out)
-        oms1.SetOverallComposition(Array[Double](y_norm))
-        oms1.SetMolarFlow(1e-8)
-        
-        oms2.SetTemperature(T)
-        oms2.SetPressure(P_out)
-        oms2.SetOverallComposition(ims1.GetOverallComposition())
-        oms2.SetMolarFlow(F_mol - 1e-8)
-        
-        oms1.Calculate()
-        oms2.Calculate()
-
-        # Report (Robust Save)
-        m_kg_s = {k: v * CONST['MW'][k] / 1000.0 for k, v in m_mol_s.items()}
-        rho = calculate_density(T, P_out, res['liq'], kg_w, sum(m_kg_s.values()))
-        report_str = generate_report(res, T, P_op, {k: m*3600 for k,m in m_kg_s.items()}, sum(m_kg_s.values())*3600, rho)
-        
-        try:
-            path = os.path.join(os.path.expanduser('~'), 'Desktop', 'SWEQ_Datasheet.txt')
-            with open(path, 'w') as f: f.write(report_str)
-            if os.name == 'nt': os.startfile(path)
-        except:
-            # Fallback to Temp
-            try:
-                temp_path = "C:\\Temp\\SWEQ_Report.txt"
-                if not os.path.exists("C:\\Temp"): os.makedirs("C:\\Temp")
-                with open(temp_path, 'w') as f: f.write(report_str)
-                if os.name == 'nt': os.startfile(temp_path)
-            except: pass
-
-    except: pass
-
-Main()
+if 'ims1' in globals():
+    Main()
