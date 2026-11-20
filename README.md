@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/burnishedLilac/DWSIM-SourWater/actions/workflows/tests.yml/badge.svg)](https://github.com/burnishedLilac/DWSIM-SourWater/actions/workflows/tests.yml)
 
-**Version:** 8.3.0 · **License:** GPLv3 · **Runs in:** DWSIM Python Script Unit Operation (IronPython/Python.NET) or plain Python 3
+**Version:** 8.4.0 · **License:** GPLv3 · **Runs in:** DWSIM Python Script Unit Operation (IronPython/Python.NET) or plain Python 3
 
 SWEQ calculates vapor–liquid equilibrium and ionic speciation of sour water
 ($NH_3 - H_2S - CO_2 - H_2O$) and performs an isothermal flash inside a DWSIM flowsheet.
@@ -16,6 +16,7 @@ validation/validate.py      comparison against published experimental VLE data
 validation/data/*.csv       experimental data with full source citation in each header
 validation/RESULTS.md       latest validation report (generated)
 validation/compare_dwsim_native.py   SWEQ vs DWSIM built-in Sour Water package
+validation/validate_co2.py   NH3–CO2–H2O validation (Kurz 1995)
 CHANGELOG.md · ROADMAP.md
 ```
 
@@ -23,11 +24,11 @@ CHANGELOG.md · ROADMAP.md
 
 | Part | Implementation |
 |---|---|
-| Chemical equilibria | NH4+ (Bates & Pinching 1949), CO2/HCO3− (Plummer & Busenberg 1982), H2S/HS−/Kw (Edwards-form correlations) |
+| Chemical equilibria | NH4+ (Bates & Pinching 1949), CO2/HCO3− (Plummer & Busenberg 1982), carbamate NH2COO− (Edwards et al. 1978), H2S/HS−/Kw (Edwards-form correlations) |
 | Activity, NH4+/HS− and neutral NH3/H2S | Pitzer (Debye–Hückel + β0, β1, Cφ); neutral self-interaction from Rumpf et al. |
-| Activity, carbonate and S2− | Davies (fallback, valid to I ≈ 0.5 mol/kg) |
-| Activity, ion–molecule | λ(NH3–NH4HS), λ(H2S–NH4HS), β1(NH4HS) regressed to Rumpf et al. 1999 (`validation/REGRESSION.md`) |
-| Vapor | Henry's law with activity coupling (ideal gas); H2S Henry from IUPAC SDS-32; water by Antoine × ideal osmotic activity |
+| Activity, all ions | Pitzer Debye–Hückel term with total ionic strength; NH4+/HS− binary terms |
+| Activity, ion–molecule | λ(NH3–NH4HS), λ(H2S–NH4HS), β1(NH4HS) regressed to Rumpf et al. 1999; λ(NH3–NH2COO−) regressed to Kurz et al. 1995 (`validation/REGRESSION.md`) |
+| Vapor | Henry's law with activity coupling (ideal gas); H2S Henry from IUPAC SDS-32; CO2 Henry from Carroll et al. 1991; water by Antoine × ideal osmotic activity |
 | Flash | PT-flash, Rachford–Rice with K-values from the electrolyte model |
 
 Convention: pH is the H+ **activity**; balances are in molality; each equilibrium uses each species' activity coefficient once.
@@ -47,7 +48,7 @@ python tests/test_limits.py      # or: pytest tests/
 python validation/validate.py    # regenerates validation/RESULTS.md
 ```
 
-Current results (v8.3.0, NH3–H2S–H2O, 293–393 K), average absolute deviation of partial pressures:
+Current results (v8.4.0), NH3–H2S–H2O (293–393 K), average absolute deviation of partial pressures:
 
 | Data set | n | p(H2S) | p(NH3) | role |
 |---|---|---|---|---|
@@ -56,6 +57,16 @@ Current results (v8.3.0, NH3–H2S–H2O, 293–393 K), average absolute deviati
 | Leyko 1959 | 14 | 10.9 % | 12.7 % | independent |
 | Oratovskii et al. 1964 | 28 | 27.7 % | 35.6 % | independent (compiler-estimated pressures) |
 | *v8.2.0 on Rumpf 1999, for reference* | 64 | 81.6 % | 15.1 % | |
+
+NH3–CO2–H2O (Kurz et al. 1995, 313–353 K, two-phase points), average absolute deviation:
+
+| Data set | p(NH3) | p(CO2) | p_total | role |
+|---|---|---|---|---|
+| Kurz 1995, 333 K isotherm | 12.8 % | 18.1 % | 7.1 % | hold-out |
+| Kurz 1995, all isotherms | 11.0 % | 18.6 % | 8.0 % | 313/353 K used in fit |
+| *v8.3.1 (no carbamate), for reference* | 62.5 % | 1242 % | 305 % | |
+
+`python validation/validate_co2.py` reproduces these numbers (`validation/RESULTS_CO2.md`).
 
 **Comparison with DWSIM's built-in Sour Water package** (bubble points, `validation/compare_dwsim_native.py`),
 deviation from Rumpf 1999 measurements, p_total / p(NH3) / p(H2S):
@@ -77,7 +88,9 @@ Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point i
 ## Known limitations
 
 * β0 and Cφ of NH4HS are uncited legacy values; regressed parameters have no temperature dependence.
-* No carbamate (NH2COO−): NH3–CO2 systems (e.g. Kurz et al. 1995 data) cannot be represented yet.
+* No solid phase: NH4HCO3 precipitation (Kurz et al. observed it at 313 K and high CO2 loading) is not modelled.
+* No measured NH3–H2S–CO2 data yet: the three-gas system combines parameters fitted to the two sub-systems.
+* p(CO2) is under-predicted by ~15 % on average; no CO2–ion interaction parameter was identifiable from the data.
 * Carbonate uses Davies; no Pitzer CO2 network yet.
 * Ideal vapor phase; isothermal only (no energy balance); no NH4HS solid.
 
@@ -87,5 +100,6 @@ Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point i
 * Bates & Pinching (1949), J. Res. Natl. Bur. Stand. 42, 419.
 * Plummer & Busenberg (1982), Geochim. Cosmochim. Acta 46, 1011.
 * Rumpf, Pérez-Salado Kamps, Sing & Maurer (1999), Fluid Phase Equilib. 158–160, 923 (reference data set).
-* Kurz, Rumpf & Maurer (1995), Fluid Phase Equilib. 104, 261 (NH3–CO2–H2O; not yet used).
+* Kurz, Rumpf & Maurer (1995), Fluid Phase Equilib. 104, 261 (NH3–CO2–H2O reference data).
+* Carroll, Slupsky & Mather (1991), J. Phys. Chem. Ref. Data 20, 1201 (CO2 Henry constant).
 * Fogg & Young (eds.) (1988), IUPAC Solubility Data Series vol. 32, *Hydrogen Sulfide, Deuterium Sulfide and Hydrogen Selenide*.

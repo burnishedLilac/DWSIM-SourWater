@@ -39,3 +39,24 @@ framework they made p(H2S) worse (AAD ~67 % vs 35 %), so they are not transferab
 
 All 2–7-parameter variants fitted Oratovskii to 6–14 % but failed on Leyko (>100 % in p(NH3)); the
 hold-out was an extrapolation in T and concentration with back-calculated compositions.
+
+## Attempt 3 — NH3–CO2–H2O, Kurz et al. 1995 (adopted in v8.4.0)
+
+**Model fixes first.** With carbamate added but Davies activity coefficients, p(CO2) was over-predicted ~8×:
+Davies gave γ(HCO3−) of 2–6 at I = 2–7 mol/kg while γ(NH4+) was 0.5. Replacing Davies by the Pitzer
+Debye–Hückel term for all ions, and placing the ion–molecule λ on the anion (Kurz convention), brought the
+errors to p(NH3) 22 % / p(CO2) 15.5 % without any fitting. The remaining p(NH3) error grew with CO2 loading
+(−3 % without CO2, up to −50 % near loading 0.5): a missing salting-out of NH3 by the ammonium salts.
+
+**Split.** Fit: 313 + 353 K. Hold-out: 333 K. Two-phase points only; partial pressures ≤ 2 kPa skipped.
+
+| Variant | hold-out p(NH3) | hold-out p(CO2) | hold-out p_total | parameters |
+|---|---|---|---|---|
+| no regression | 22.8 % | 16.7 % | 12.1 % | — |
+| **λ(NH3–NH2COO−) (adopted)** | **12.8 %** | **18.1 %** | **7.1 %** | +0.0528 ± 0.0076 |
+| λ(NH3–HCO3−), λ(NH3–NH2COO−) | 13.2 % | 12.5 % | 6.7 % | +0.141 ± 0.046, +0.042 ± 0.006 |
+| + λ(CO2–HCO3−) | 13.1 % | 14.6 % | 8.0 % | λ(CO2–HCO3−) not identifiable (± 50) |
+
+The one-parameter variant was adopted: it is well determined, and the second parameter does not improve the
+hold-out consistently. Independent check: Kurz et al. report β(NH3, NH2COO−) = −0.03933 + 25.263/T, i.e. +0.037 at
+333 K in their own framework — same sign and magnitude as the value regressed here.
