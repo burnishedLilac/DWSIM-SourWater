@@ -16,6 +16,8 @@
   inherits the NH4HS salting effect. NH3–H2S results are unchanged.
 
 ### Validation
+- New independent NH3–H2S–CO2–H2O test (`validation/validate_ternary.py`): Wilson et al. 1985 (GPA), Badger & Silver
+  1938, van Krevelen et al. 1949. At 366 K (stripper conditions): p(NH3) 9 %, p(CO2) 21 %, p(H2S) 18 %.
 - Kurz 1995 (all VLE points): p(NH3) 62.5 % → 11.0 %, p(CO2) 1242 % → 18.6 %, p_total 305 % → 8.0 %.
 - Rumpf 1999 (NH3–H2S): unchanged (p(H2S) 16.1 %, p(NH3) 10.7 %).
 

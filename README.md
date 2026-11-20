@@ -17,6 +17,7 @@ validation/data/*.csv       experimental data with full source citation in each 
 validation/RESULTS.md       latest validation report (generated)
 validation/compare_dwsim_native.py   SWEQ vs DWSIM built-in Sour Water package
 validation/validate_co2.py   NH3–CO2–H2O validation (Kurz 1995)
+validation/validate_ternary.py   NH3–H2S–CO2–H2O independent test (Wilson 1985, Badger & Silver 1938, van Krevelen 1949)
 CHANGELOG.md · ROADMAP.md
 ```
 
@@ -68,6 +69,18 @@ NH3–CO2–H2O (Kurz et al. 1995, 313–353 K, two-phase points), average absol
 
 `python validation/validate_co2.py` reproduces these numbers (`validation/RESULTS_CO2.md`).
 
+NH3–H2S–CO2–H2O, independent test (no parameter fitted to these data; IUPAC SDS-32 compilation):
+
+| Data set | n | p(NH3) | p(CO2) | p(H2S) |
+|---|---|---|---|---|
+| Wilson, Gillespie & Owens 1985 (GPA), 366 K | 3 | 9.2 % | 20.6 % | 17.7 % |
+| Wilson et al. 1985, 422 K (extrapolation) | 4 | 11.1 % | 16.4 % | 22.0 % |
+| Badger & Silver 1938, 293 K | 12–13 | 17.2 % | 29.7 % | 53.8 % |
+| van Krevelen et al. 1949, 293–333 K | 27 | – | – | 23.4 % |
+
+The older data (1938, 1949) are in mol/dm³ (density assumed 1.0 kg/L) and were obtained by chemical analysis; at
+293 K p(H2S) is over-predicted. `python validation/validate_ternary.py` reproduces these numbers.
+
 **Comparison with DWSIM's built-in Sour Water package** (bubble points, `validation/compare_dwsim_native.py`),
 deviation from Rumpf 1999 measurements, p_total / p(NH3) / p(H2S):
 
@@ -89,7 +102,8 @@ Treat results above ~6 mol/kg NH3 or above 393 K as extrapolation. Every point i
 
 * β0 and Cφ of NH4HS are uncited legacy values; regressed parameters have no temperature dependence.
 * No solid phase: NH4HCO3 precipitation (Kurz et al. observed it at 313 K and high CO2 loading) is not modelled.
-* No measured NH3–H2S–CO2 data yet: the three-gas system combines parameters fitted to the two sub-systems.
+* The three-gas system combines parameters fitted to the two sub-systems; it is tested (not fitted) against the
+  limited ternary data above. p(H2S) at 293 K is over-predicted by ~30–50 %.
 * p(CO2) is under-predicted by ~15 % on average; no CO2–ion interaction parameter was identifiable from the data.
 * Carbonate uses Davies; no Pitzer CO2 network yet.
 * Ideal vapor phase; isothermal only (no energy balance); no NH4HS solid.

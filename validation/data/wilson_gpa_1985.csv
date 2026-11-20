@@ -1,0 +1,12 @@
+# Wilson, Gillespie & Owens (1985), Proc. 64th Ann. Conv. Gas Processors Association, 282-288. Compiled in IUPAC
+# Solubility Data Series vol. 32 (Fogg & Young, 1988), pp. 73-74. Liquid composition in mole %; partial pressures
+# in bar (converted from psia by the compiler). Only 200 F and 300 F runs are listed (higher T outside model range).
+# water_calc = 1 where the vapor water content was too low to measure and was calculated by the authors.
+T_K,x_NH3_pct,x_CO2_pct,x_H2S_pct,x_H2O_pct,p_NH3_bar,p_CO2_bar,p_H2S_bar,p_H2O_bar,p_total_bar,water_calc
+366.48,2.00,0.57,0.51,96.92,0.103,0.578,0.296,0.723,1.701,0
+366.48,2.06,0.26,0.51,97.17,0.152,0.100,0.135,0.765,1.151,0
+366.48,17.76,3.84,4.08,74.32,1.616,0.790,1.486,0.658,4.551,1
+422.04,2.00,0.24,0.49,97.27,0.611,2.434,1.236,4.688,8.970,0
+422.04,2.12,0.29,0.53,97.06,0.809,3.001,1.404,4.507,9.722,0
+422.04,17.32,4.19,3.82,74.67,6.620,18.494,12.287,4.794,42.196,1
+422.04,2.16,1.44,1.73,94.72,0.313,63.102,22.190,7.475,93.079,0
