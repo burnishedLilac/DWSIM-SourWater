@@ -1,5 +1,24 @@
 # Changelog
 
+## [8.4.0] — 2026-11-20
+
+### Added
+- Carbamate (NH2COO−) chemistry: NH2COO− + H2O ⇌ NH3 + HCO3−, Edwards et al. (1978) constant. The sign of its
+  temperature dependence (lost in the secondary source) was fixed by thermodynamics and confirmed with the data.
+- Kurz, Rumpf & Maurer (1995) NH3–CO2–H2O data (63 points, 313–353 K) and `validation/validate_co2.py`.
+- λ(NH3–NH2COO−) = 0.0528 regressed to Kurz 313 + 353 K; 333 K kept as hold-out (`validation/regress_co2.py`).
+
+### Fixed
+- CO2 Henry constant now from Carroll, Slupsky & Mather (1991).
+- Davies equation replaced by the Pitzer Debye–Hückel term for all ions: Davies gave γ(HCO3−) = 2–6 at high ionic
+  strength and over-predicted p(CO2) ~8×. Ionic strength now includes every ion.
+- Ion–molecule λ terms placed on the anion (Kurz et al. convention), so NH4+ paired with HCO3−/NH2COO− no longer
+  inherits the NH4HS salting effect. NH3–H2S results are unchanged.
+
+### Validation
+- Kurz 1995 (all VLE points): p(NH3) 62.5 % → 11.0 %, p(CO2) 1242 % → 18.6 %, p_total 305 % → 8.0 %.
+- Rumpf 1999 (NH3–H2S): unchanged (p(H2S) 16.1 %, p(NH3) 10.7 %).
+
 ## [8.3.1] — 2026-11-18
 
 ### Added
